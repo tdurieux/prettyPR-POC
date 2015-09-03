@@ -21,9 +21,12 @@ public class App {
         ServletHolder jerseyServlet = context.addServlet(org.glassfish.jersey.servlet.ServletContainer.class, "/api/v.0/*");
         jerseyServlet.setInitOrder(0);
 
-        // Tells the Jersey Servlet which REST service/class to load.
+        jerseyServlet.setInitParameter("com.sun.jersey.config.property.packages",
+                EntryPoint.class.getCanonicalName());
         jerseyServlet.setInitParameter("jersey.config.server.provider.classnames",
                                               EntryPoint.class.getCanonicalName());
+        jerseyServlet.setInitParameter("com.sun.jersey.api.json.POJOMappingFeature", "true");
+
 
         context.addServlet(new ServletHolder(new DefaultServlet()), "/*");
 
