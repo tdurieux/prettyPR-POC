@@ -1,6 +1,6 @@
 package com.github.tdurieux.prettyPR;
 
-import com.github.tdurieux.prettyPR.api.v0.EntryPoint;
+import com.github.tdurieux.prettyPR.api.v0.PRDiffAPI;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -22,9 +22,9 @@ public class App {
         jerseyServlet.setInitOrder(0);
 
         jerseyServlet.setInitParameter("com.sun.jersey.config.property.packages",
-                EntryPoint.class.getCanonicalName());
+                                              PRDiffAPI.class.getCanonicalName());
         jerseyServlet.setInitParameter("jersey.config.server.provider.classnames",
-                                              EntryPoint.class.getCanonicalName());
+                                              PRDiffAPI.class.getCanonicalName());
         jerseyServlet.setInitParameter("com.sun.jersey.api.json.POJOMappingFeature", "true");
 
 
