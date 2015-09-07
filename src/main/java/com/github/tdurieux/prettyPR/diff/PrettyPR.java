@@ -12,8 +12,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-import static com.github.tdurieux.prettyPR.diff.StringUtil.*;
+import static com.github.tdurieux.prettyPR.diff.StringUtil.downloadFile;
+import static com.github.tdurieux.prettyPR.diff.StringUtil.listStr2Str;
+import static com.github.tdurieux.prettyPR.diff.StringUtil.strToListStr;
 
 public class PrettyPR {
     private String user;
@@ -21,7 +26,8 @@ public class PrettyPR {
     private int pullRequestID;
     private Map<String, String> oldFileContent;
     private Map<String, String> newFileContent;
-    private Map<String, String> filePatch;
+    private Map<String, Patch<String>> filePatch;
+    private Map<String, String> fileStringPatch;
     private Map<String, String> semanticPatch;
     private Map<String, CtType> oldTypes;
     private Map<String, CtType> newTypes;
@@ -34,7 +40,8 @@ public class PrettyPR {
         this.pullRequestID = pullRequestID;
         oldFileContent = new HashMap<String, String>();
         newFileContent = new HashMap<String, String>();
-        filePatch = new HashMap<String, String>();
+        filePatch = new HashMap<String, Patch<String>>();
+        fileStringPatch = new HashMap<String, String>();
         semanticPatch = new HashMap<String, String>();
         oldTypes = new HashMap<String, CtType>();
         newTypes = new HashMap<String, CtType>();
@@ -55,38 +62,62 @@ public class PrettyPR {
     }
 
     public void run() {
+        final ExecutorService executorService = Executors.newWorkStealingPool();
         final PagedIterable<GHPullRequestFileDetail> ghPullRequestFileDetails = pullRequest.listFiles();
         for (PagedIterator<GHPullRequestFileDetail> iterator = ghPullRequestFileDetails.iterator(); iterator.hasNext(); ) {
-            GHPullRequestFileDetail changedFile = iterator.next();
-            filePatch.put(changedFile.getFilename(), changedFile.getPatch());
+            final GHPullRequestFileDetail changedFile = iterator.next();
+            executorService.execute(new Runnable() {
+                public void run() {
+                    fileStringPatch.put(changedFile.getFilename(), changedFile.getPatch());
+                    // the patch splited line by line
+                    List<String> linesPatch = formatPatch(changedFile.getPatch());
+                    // the patch parsed into a Patch
+                    Patch<String> stringPatch = DiffUtils.parseUnifiedDiff(linesPatch);
+                    filePatch.put(changedFile.getFilename(), stringPatch);
+                    // get the content of the changed file
+                    String newContent = downloadFile(changedFile.getRawUrl());
+                    // undo the change in order to get the file before the change
+                    String oldContent = listStr2Str(DiffUtils.unpatch(strToListStr(newContent), stringPatch));
+                    oldFileContent.put(changedFile.getFilename(), oldContent);
+                    newFileContent.put(changedFile.getFilename(), newContent);
+                    // get the spoon type of each version
+                    /*CtType<?> oldType = null;
+                    if(oldContent!=null && !oldContent.isEmpty()) {
+                        oldType = SpoonUtils.stringToCTElement(oldContent);
+                        oldTypes.put(changedFile.getFilename(), oldType);
+                    }
+                    CtType<?> newType = null;
+                    if(newContent!=null && !newContent.isEmpty()) {
+                        newType = SpoonUtils.stringToCTElement(newContent);
+                        oldTypes.put(changedFile.getFilename(), newType);
+                    }
+                    if(newType!= null && oldType != null) {
+                        // performs the semantic diff
+                        Patch<String> diff = DiffUtils.diff(strToListStr(oldType.toString()), strToListStr(newType.toString()));
+                        semanticPatch.put(changedFile.getFilename(), (listStr2Str(DiffUtils.generateUnifiedDiff(changedFile.getFilename(), changedFile.getFilename(), strToListStr(oldType.toString()), diff, 0))));
+                    }*/
+                    System.out.println("End " + changedFile.getFilename());
+                }
+            });
+        }
+        executorService.shutdown();
+        try {
+            executorService.awaitTermination(5, TimeUnit.MINUTES);
+            oldTypes = SpoonUtils.stringToCTElement(oldFileContent);
+            newTypes = SpoonUtils.stringToCTElement(newFileContent);
+        } catch (InterruptedException e) {
 
-            // the patch splited line by line
-            List<String> linesPatch = formatPatch(changedFile.getPatch());
-            // the patch parsed into a Patch
-            Patch<String> stringPatch = DiffUtils.parseUnifiedDiff(linesPatch);
-            // get the content of the changed file
-            String newContent = downloadFile(changedFile.getRawUrl());
-            // undo the change in order to get the file before the change
-            String oldContent = listStr2Str(DiffUtils.unpatch(strToListStr(newContent), stringPatch));
-            oldFileContent.put(changedFile.getFilename(), oldContent);
-            newFileContent.put(changedFile.getFilename(), newContent);
-            // get the spoon type of each version
-            CtType<?> oldType = null;
-            if(oldContent!=null && !oldContent.isEmpty()) {
-                oldType = SpoonUtils.stringToCTElement(oldContent);
-                oldTypes.put(changedFile.getFilename(), oldType);
-            }
-            CtType<?> newType = null;
-            if(newContent!=null && !newContent.isEmpty()) {
-                newType = SpoonUtils.stringToCTElement(newContent);
-                oldTypes.put(changedFile.getFilename(), newType);
-            }
+        }
+        /*for (PagedIterator<GHPullRequestFileDetail> iterator = ghPullRequestFileDetails.iterator(); iterator.hasNext(); ) {
+            GHPullRequestFileDetail changedFile = iterator.next();
+            CtType<?> oldType = oldTypes.get(changedFile.getFilename());
+            CtType<?> newType = newTypes.get(changedFile.getFilename());
             if(newType!= null && oldType != null) {
                 // performs the semantic diff
                 Patch<String> diff = DiffUtils.diff(strToListStr(oldType.toString()), strToListStr(newType.toString()));
                 semanticPatch.put(changedFile.getFilename(), (listStr2Str(DiffUtils.generateUnifiedDiff(changedFile.getFilename(), changedFile.getFilename(), strToListStr(oldType.toString()), diff, 0))));
             }
-        }
+        }*/
     }
 
     private List<String> formatPatch(String patch) {
@@ -129,8 +160,12 @@ public class PrettyPR {
         return newFileContent;
     }
 
-    public Map<String, String> getFilePatch() {
+    public Map<String, Patch<String>> getFilePatch() {
         return filePatch;
+    }
+
+    public Map<String, String> getFileStringPatch() {
+        return fileStringPatch;
     }
 
     public Map<String, String> getSemanticPatch() {
@@ -143,5 +178,9 @@ public class PrettyPR {
 
     public Map<String, CtType> getNewTypes() {
         return newTypes;
+    }
+
+    public GHPullRequest getPullRequest() {
+        return pullRequest;
     }
 }
