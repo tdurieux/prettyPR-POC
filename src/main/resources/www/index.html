@@ -1,1 +1,91 @@
-blabla
+<html lang="en" ng-app="PrettyPR">
+<head>
+    <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/0.9.4/angular-material.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=RobotoDraft:300,400,500,700,400italic">
+    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="initial-scale=1"/>
+    <title>Pretty PR</title>
+</head>
+<body layout="column" ng-controller="AppCtrl" layout-fill style="overflow: hidden;">
+<md-toolbar layout="row">
+    <div class="md-toolbar-tools">
+        <md-button ng-click="toggleSidenav('left')" hide-gt-sm class="md-icon-button">
+            <md-icon aria-label="Menu"
+                     md-svg-icon="https://s3-us-west-2.amazonaws.com/s.cdpn.io/68133/menu.svg"></md-icon>
+        </md-button>
+        <h1>Pretty Pull-Request</h1>
+    </div>
+</md-toolbar>
+<div layout="row" flex>
+    <md-sidenav layout="column" class="md-sidenav-left md-whiteframe-z2" md-component-id="left"
+                md-is-locked-open="$mdMedia('gt-sm')">
+        <section ng-repeat="change in prettyPR.pullrequest.changes">
+            {{change.location.type}}: {{change.location.class?change.location.class:change.location.path}}
+        </section>
+    </md-sidenav>
+    <div layout="column" flex id="content">
+        <md-content layout="column" flex>
+            <md-content md-theme="docs-dark" style="flex-shrink: 0;">
+                <form name="prForm" ng-submit="submit()" layout-padding layout="row" layout-sm="column" ng-show="form">
+                    <md-input-container>
+                        <label>User</label>
+                        <input ng-model="pr.user" required>
+                    </md-input-container>
+                    <md-input-container>
+                        <label>Repository</label>
+                        <input ng-model="pr.repo" required>
+                    </md-input-container>
+                    <md-input-container>
+                        <label>Pull-Request ID</label>
+                        <input ng-model="pr.id" type="number" min="1" required>
+                    </md-input-container>
+                    <md-button type="submit" class="md-raised md-primary" ng-disabled="onProgress">
+                        Submit
+                    </md-button>
+                </form>
+                <md-content md-scroll-shrink ng-hide="form" layout-padding>
+                    <div class="md-toolbar-tools">
+                        <h2>
+                            <span>#{{prettyPR.pullrequest.id}} Pull Request - {{prettyPR.pullrequest.title}}</span>
+                        </h2>
+                        <md-button ng-click="form = true">Change PR</md-button>
+                        <md-button ng-click="morePR = true" ng-hide="morePR">More data</md-button>
+                        <md-button ng-click="morePR = false" ng-show="morePR">Less data</md-button>
+                    </div>
+                    <markdown ng-show="morePR" text="{{prettyPR.pullrequest.body}}"></markdown>
+                </md-content>
+                <md-progress-linear ng-if="onProgress" md-mode="indeterminate"
+                                    style="margin-top: -5px;"></md-progress-linear>
+            </md-content>
+            <md-toolbar class="md-warn" ng-if="error">
+                <div class="md-toolbar-tools">
+                    Error: {{error.exception}}
+                </div>
+            </md-toolbar>
+            <md-content ng-if="prettyPR" layout="column" flex syle="overflow: hidden;">
+                <section ng-repeat="change in prettyPR.pullrequest.changes">
+                    <md-subheader class="md-no-sticky">{{change.location.type}}:
+                        {{change.location.class?change.location.class:change.location.path}}</md-subheader>
+                    <md-list>
+                        <md-list-item>
+                            <div class="md-list-item">
+                                <pre>{{change.patch}}</pre>
+                            </div>
+                        </md-list-item>
+                        <md-divider></md-divider>
+                    </md-list>
+                </section>
+            </md-content>
+        </md-content>
+    </div>
+</div>
+<!-- Angular Material Dependencies -->
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular-animate.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular-aria.min.js"></script>
+
+<script src="https://cdn.rawgit.com/showdownjs/showdown/1.2.3/dist/showdown.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angular_material/0.10.1/angular-material.min.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
