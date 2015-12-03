@@ -57,7 +57,12 @@
         <dependency>
             <groupId>fr.inria.gforge.spoon</groupId>
             <artifactId>spoon-core</artifactId>
-            <version>4.2.0</version>
+            <version>4.5.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>fr.inria.spirals</groupId>
+            <artifactId>gumtree-spoon-ast-diff</artifactId>
+            <version>0.0.3-SNAPSHOT</version>
         </dependency>
     </dependencies>
 </project>

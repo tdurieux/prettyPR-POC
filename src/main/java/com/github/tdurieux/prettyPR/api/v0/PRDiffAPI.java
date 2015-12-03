@@ -1,12 +1,22 @@
 package com.github.tdurieux.prettyPR.api.v0;
 
+import com.github.gumtreediff.actions.model.Action;
+import com.github.gumtreediff.actions.model.Delete;
+import com.github.gumtreediff.actions.model.Move;
+import com.github.gumtreediff.actions.model.Update;
 import com.github.tdurieux.prettyPR.diff.PrettyPR;
 import difflib.Delta;
 import difflib.DiffUtils;
 import difflib.Patch;
+import fr.inria.sacha.spoon.diffSpoon.CtDiff;
+import fr.inria.sacha.spoon.diffSpoon.DiffSpoon;
+import fr.inria.sacha.spoon.diffSpoon.SpoonGumTreeBuilder;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import spoon.reflect.declaration.CtClass;
+import spoon.reflect.declaration.CtElement;
 import spoon.reflect.declaration.CtMethod;
+import spoon.reflect.declaration.CtPackage;
 import spoon.reflect.declaration.CtType;
 
 import javax.ws.rs.GET;
@@ -41,107 +51,114 @@ public class PRDiffAPI {
             pullrequest.accumulate("url", prettyPR.getPullRequest().getUrl().getPath());
             output.accumulate("pullrequest", pullrequest);
 
-
-            List<CtMethod> changedMethod = new ArrayList<CtMethod>();
-            Set<CtType> changedCtType = new HashSet<CtType>();
-
-            final Set<String> fileNames = prettyPR.getFilePatch().keySet();
+            final Set<String> fileNames = prettyPR.getFiles();
             for (Iterator<String> iterator = fileNames.iterator(); iterator.hasNext(); ) {
                 String filename = iterator.next();
                 JSONObject change = new JSONObject();
-                pullrequest.append("changes", change);
+
+                change.put("newFile", prettyPR.getNewFileContent().get(filename));
+                change.put("oldFile", prettyPR.getOldFileContent().get(filename));
+
                 change.accumulate("patch", prettyPR.getFileStringPatch().get(filename));
                 JSONObject location = new JSONObject();
                 location.accumulate("path", filename);
                 change.accumulate("location", location);
-                if(prettyPR.getNewTypes().get(filename)!= null) {
-                    final CtType cl = prettyPR.getNewTypes().get(filename);
-                    changedCtType.add(cl);
-                    location.accumulate("class", cl.getQualifiedName());
-                    location.accumulate("type", getType(cl));
-                } else if(prettyPR.getOldTypes().get(filename)!=null) {
-                    final CtType cl = prettyPR.getOldTypes().get(filename);
-                    changedCtType.add(cl);
-                    location.accumulate("class", cl.getQualifiedName());
-                    location.accumulate("type", getType(cl));
+
+                final CtType newCl;
+                final CtType oldCl ;
+                DiffSpoon diffSpoon = null;
+                if (prettyPR.getNewTypes().get(filename) != null) {
+                    newCl = prettyPR.getNewTypes().get(filename);
+                    location.put("class", newCl.getQualifiedName());
+                    location.put("type", getType(newCl));
+                    diffSpoon = new DiffSpoon(newCl.getFactory());
                 } else {
-                    location.accumulate("type", "Other");
+                    newCl = null;
                 }
-                JSONArray changedMethods = new JSONArray();
-                change.accumulate("changedMethods", changedMethods);
+                if (prettyPR.getOldTypes().get(filename) != null) {
+                    oldCl = prettyPR.getOldTypes().get(filename);
+                    if(diffSpoon == null) {
+                        location.put("class", oldCl.getQualifiedName());
+                        location.put("type", getType(oldCl));
 
-                final Patch<String> stringPatch = prettyPR.getFilePatch().get(filename);
-                final List<Delta<String>> deltas = stringPatch.getDeltas();
-                for (int i = 0; i < deltas.size(); i++) {
-                    Delta<String> stringDelta = deltas.get(i);
-
-                    int startLine = stringDelta.getRevised().getPosition() + 1;
-                    int endLine = stringDelta.getRevised().last() + 1;
-                    final List<String> lines = stringDelta.getRevised().getLines();
-                    for (int j = 0; j < lines.size(); j++) {
-                        if(j >= stringDelta.getOriginal().getLines().size()) {
-                            break;
-                        }
-                        String s = lines.get(j);
-                        if(stringDelta.getOriginal().getLines().get(j).equals(s)) {
-                            startLine ++;
-                        } else {
-                            break;
-                        }
+                        diffSpoon = new DiffSpoon(oldCl.getFactory());
                     }
-                    int diff = lines.size() - stringDelta.getOriginal().getLines().size();
-                    if(stringDelta.getOriginal().getLines().size() > 0) {
-                        for (int j = lines.size() - 1; j >= 0; j--) {
-                            String s = lines.get(j);
-                            if (j - diff >= 0 && stringDelta.getOriginal().getLines().get(j - diff).equals(s)) {
-                                endLine--;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-
-                    CtType ctType = prettyPR.getNewTypes().get(filename);
-                    if(ctType == null) {
-                        ctType = prettyPR.getOldTypes().get(filename);
-                    }
-                    if(ctType == null) {
-                        continue;
-                    }
-
-                    final Set<CtMethod> methods = ctType.getMethods();
-
-                    boolean find = false;
-                    for (Iterator iterator1 = methods.iterator(); iterator1.hasNext(); ) {
-                        final CtMethod ctMethod = (CtMethod) iterator1.next();
-                        int startM = ctMethod.getPosition().getLine();
-                        int endM = ctMethod.getPosition().getEndLine();
-                        if(ctMethod.getBody() != null) {
-                            endM = ctMethod.getBody().getPosition().getEndLine();
-                        }
-                        if((startLine < startM && startM < endLine && endLine < endM) ||
-                                   (startLine >= startM && endLine <= endM) ||
-                                   (startLine < endM && endM < endLine && startM < startLine ) ||
-                                   (startLine <= startM && endLine >= endM)){
-                            find = true;
-                            JSONObject jsonChangedMethod = new JSONObject();
-                            changedMethods.put(jsonChangedMethod);
-                            jsonChangedMethod.accumulate("method", ctMethod.getSimpleName());
-                            final Method getDeltaText = DiffUtils.class.getDeclaredMethod("getDeltaText", Delta.class);
-                            if(getDeltaText!=null) {
-                                getDeltaText.setAccessible(true);
-                                jsonChangedMethod.accumulate("patch", listStr2Str((List<String>) getDeltaText.invoke(null, stringDelta)));
-                            }
-                            changedMethod.add(ctMethod);
-                            System.out.println(ctMethod.getSimpleName() + " " + stringDelta.getType());
-                        }
-                    }
-                    if(find == false) {
-                        System.out.println("No method found for the change " + stringDelta);
+                } else {
+                    oldCl = null;
+                    if(newCl == null){
+                        location.accumulate("type", "Other");
+                        diffSpoon = new DiffSpoon();
                     }
                 }
+                CtDiff results = diffSpoon.analyze(oldCl, newCl);
+                CtElement ctElement = results.commonAncestor();
+                List<Action> actions = results.getRootActions();
+                if(actions.size() == 0) {
+                    continue;
+                }
+
+                pullrequest.append("changes", change);
+                for (Action action : actions) {
+                    CtElement element = (CtElement) action.getNode().getMetadata(
+                            SpoonGumTreeBuilder.SPOON_OBJECT);
+                    JSONObject jsonAction = new JSONObject();
+                    // action name
+                    jsonAction.accumulate("action", action.getClass().getSimpleName());
+
+                    // node type
+                    String nodeType = element.getClass().getSimpleName();
+                    nodeType = nodeType.substring(2, nodeType.length() - 4);
+                    jsonAction.accumulate("nodeType", nodeType);
+
+                    JSONObject actionPositionJSON = new JSONObject();
+                    if(element.getPosition() != null) {
+                        actionPositionJSON
+                                .put("line", element.getPosition().getLine());
+                        actionPositionJSON.put("sourceStart",
+                                element.getPosition().getSourceStart());
+                        actionPositionJSON.put("sourceEnd",
+                                element.getPosition().getSourceEnd());
+                        actionPositionJSON.put("endLine",
+                                element.getPosition().getEndLine());
+
+                    }
+                    if (action instanceof Delete ||
+                            action instanceof Update ||
+                            action instanceof Move) {
+                        jsonAction.put("oldLocation", actionPositionJSON);
+                    } else {
+                        jsonAction.put("newLocation", actionPositionJSON);
+                    }
+
+                    // action position
+                    if (action instanceof Move ||
+                            action instanceof Update) {
+                        CtElement elementDest = (CtElement) action.getNode().getMetadata(SpoonGumTreeBuilder.SPOON_OBJECT_DEST);
+
+                        JSONObject actionDestPositionJSON = new JSONObject();
+                        if(elementDest.getPosition() != null) {
+                            actionDestPositionJSON.put("line",
+                                    elementDest.getPosition().getLine());
+                            actionDestPositionJSON.put("sourceStart",
+                                    elementDest.getPosition().getSourceStart());
+                            actionDestPositionJSON.put("sourceEnd",
+                                    elementDest.getPosition().getSourceEnd());
+                            actionDestPositionJSON.put("endLine",
+                                    elementDest.getPosition().getEndLine());
+                        }
+                        jsonAction.put("newLocation", actionDestPositionJSON);
+                    }
+
+                    // if all actions are applied on the same node print only the first action
+                    if (element.equals(ctElement) && action instanceof Update) {
+                        break;
+                    }
+                    change.append("actions", jsonAction);
+                    System.out.println(jsonAction.toString(2));
+                }
+
             }
-            return Response.status(201).entity(output.toString()).build();
+            return Response.status(201).entity(output.toString(2)).build();
         } catch (Exception e) {
             e.printStackTrace();
             JSONObject error = new JSONObject();
