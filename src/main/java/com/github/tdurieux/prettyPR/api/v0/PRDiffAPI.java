@@ -10,6 +10,7 @@ import difflib.DiffUtils;
 import difflib.Patch;
 import fr.inria.sacha.spoon.diffSpoon.CtDiff;
 import fr.inria.sacha.spoon.diffSpoon.DiffSpoon;
+import fr.inria.sacha.spoon.diffSpoon.DiffSpoonImpl;
 import fr.inria.sacha.spoon.diffSpoon.SpoonGumTreeBuilder;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -71,7 +72,7 @@ public class PRDiffAPI {
                     newCl = prettyPR.getNewTypes().get(filename);
                     location.put("class", newCl.getQualifiedName());
                     location.put("type", getType(newCl));
-                    diffSpoon = new DiffSpoon(newCl.getFactory());
+                    diffSpoon = new DiffSpoonImpl(newCl.getFactory());
                 } else {
                     newCl = null;
                 }
@@ -81,16 +82,16 @@ public class PRDiffAPI {
                         location.put("class", oldCl.getQualifiedName());
                         location.put("type", getType(oldCl));
 
-                        diffSpoon = new DiffSpoon(oldCl.getFactory());
+                        diffSpoon = new DiffSpoonImpl(oldCl.getFactory());
                     }
                 } else {
                     oldCl = null;
                     if(newCl == null){
                         location.accumulate("type", "Other");
-                        diffSpoon = new DiffSpoon();
+                        diffSpoon = new DiffSpoonImpl();
                     }
                 }
-                CtDiff results = diffSpoon.analyze(oldCl, newCl);
+                CtDiff results = diffSpoon.compare(oldCl, newCl);
                 CtElement ctElement = results.commonAncestor();
                 List<Action> actions = results.getRootActions();
                 if(actions.size() == 0) {
