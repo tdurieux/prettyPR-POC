@@ -35,19 +35,19 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-server</artifactId>
-            <version>9.3.9.v20160517</version>
+           <groupId>org.eclipse.jetty</groupId>
+           <artifactId>jetty-server</artifactId>
+           <version>[9.3.24.v20180605,)</version>
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-servlet</artifactId>
-            <version>9.3.3.v20150827</version>
+            <version>[9.3.24.v20180605,)</version>
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-util</artifactId>
-            <version>9.3.3.v20150827</version>
+            <version>[9.3.24.v20180605,)</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.core</groupId>
